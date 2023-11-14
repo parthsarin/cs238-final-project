@@ -48,6 +48,14 @@ def make_memoryless(π: Policy):
     out.action = lambda os: π.action(os[-1])
     return out
 
+
+class UtilityFunction:
+    def __getitem__(self, s: State):
+        raise NotImplementedError("utility not implemented")
+    
+    def __setitem__(self, s: State, u: float):
+        raise NotImplementedError("utility not implemented")
+
 # ------------------------------------------------------------------------------
 # POMDP class with some logic implemented
 # ------------------------------------------------------------------------------
@@ -88,7 +96,7 @@ class POMDP:
         raise NotImplementedError("observation not implemented")
         
 
-    def lookahead(self, s: State, a: Action, U: dict[State, float]) -> float:
+    def lookahead(self, s: State, a: Action, U: UtilityFunction) -> float:
         """
         Calculates the expected utility of taking action a from state s.
 

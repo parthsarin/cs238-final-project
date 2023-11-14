@@ -1,6 +1,9 @@
-from POMDP import POMDP, State, Action, Observation
+from .POMDP import POMDP, State, Action, Observation
 from typing import Union, List
 
+# ------------------------------------------------------------------------------
+# state, action, and observation spaces
+# ------------------------------------------------------------------------------
 class StudentAction(Action):
     """
     Defines the action space for the student. Students can either submit or not
@@ -8,7 +11,12 @@ class StudentAction(Action):
     they must choose how to allocate their remaining time between resting and
     working (numbers which add up to 1).
     """
-    def __init__(self, submit: bool, rest: Union[float, None], work: Union[float, None]):
+    def __init__(
+            self, 
+            submit: bool = False,
+            rest: Union[float, None] = None, 
+            work: Union[float, None] = None
+        ):
         super().__init__()
         self.submit = submit
 
@@ -40,22 +48,34 @@ class StudentState(State):
     mh -- mental health, in [-1, 1]
     prod -- productivity, in [0, 1]
     g -- list of competencies, in [0, 1]
+    free_time -- free time, in [0, 7]
+    time_worked -- the total amount of time spent working on the current assignment
     """
-    def __init__(self, mh, prod, g: List[float]):
+    def __init__(self, mh, prod, g: List[float], free_time, time_worked):
         super().__init__()
 
         assert -1 <= mh <= 1, "mh must be in [-1, 1]"
         assert 0 <= prod <= 1, "prod must be in [0, 1]"
+        assert all([0 <= gi <= 1 for gi in g]), "g must be in [0, 1]"
+        assert 0 <= free_time <= 7, "free_time must be in [0, 7]"
 
         self.mh = mh
         self.prod = prod
         self.g = g
+        self.free_time = free_time
+        self.time_worked = time_worked
     
     def __hash__(self):
-        return hash((self.mh, self.prod, tuple(self.g)))
+        return hash((self.mh, self.prod, tuple(self.g), self.free_time, self.time_worked))
     
     def __eq__(self, other: object) -> bool:
-        return all([self.mh == other.mh, self.prod == other.prod, self.g == other.g])
+        return all([
+            self.mh == other.mh, 
+            self.prod == other.prod, 
+            self.g == other.g, 
+            self.free_time == other.free_time,
+            self.time_worked == other.time_worked
+        ])
 
 
 class StudentObservation(Observation):
@@ -79,6 +99,9 @@ class StudentObservation(Observation):
         return self.assignment_grade == other.assignment_grade and self.free_time == other.free_time
 
 
+# ------------------------------------------------------------------------------
+# student class and logic
+# ------------------------------------------------------------------------------
 class Student(POMDP):
     def __init__(self):
         super().__init__(0.95)
@@ -98,17 +121,11 @@ class Student(POMDP):
         a in state s.
         """
         raise NotImplementedError("transition not implemented")
-    
-    
-    def lookahead(self, b: dict[StudentState, float], a: StudentAction) -> float:
-        """
-        Calculates the expected utility of taking action a in belief state b.
 
-        params
-            b -- belief state (supports b[s] to lookup probability of state s)
-            a -- action to take
-
-        returns
-        expected utility of taking action a in belief state b
+    
+    def observation(self, a: StudentAction, sp: StudentState) -> Observation:
         """
-        raise NotImplementedError("lookahead not implemented")
+        Returns the observation for taking action a and transitioning to state
+        sp.
+        """
+        raise NotImplementedError("observation not implemented")
