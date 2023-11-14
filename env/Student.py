@@ -36,16 +36,19 @@ class StudentState(State):
     their competencies/skills (g). Of course, this is an inaccurate way to
     represent intelligence, meant as a critique of the way we measure it in
     schools.
+
+    mh -- mental health, in [-1, 1]
+    prod -- productivity, in [0, 1]
+    g -- list of competencies, in [0, 1]
     """
     def __init__(self, mh, prod, g: List[float]):
         super().__init__()
 
         assert -1 <= mh <= 1, "mh must be in [-1, 1]"
-        self.mh = mh
-
         assert 0 <= prod <= 1, "prod must be in [0, 1]"
-        self.prod = prod
 
+        self.mh = mh
+        self.prod = prod
         self.g = g
     
     def __hash__(self):
@@ -64,9 +67,9 @@ class StudentObservation(Observation):
         super().__init__()
 
         assert 0 <= assignment_grade <= 100, "assignment_grade must be in [0, 100]"
-        self.assignment_grade = assignment_grade
-
         assert 0 <= free_time <= 7, "free_time must be in [0, 7]"
+
+        self.assignment_grade = assignment_grade
         self.free_time = free_time
     
     def __hash__(self):
@@ -77,47 +80,25 @@ class StudentObservation(Observation):
 
 
 class Student(POMDP):
-    def __init__(
-            self, 
-            initial_state: StudentState, 
-            initial_belief: dict[StudentState, float]
-        ):
-        super().__init__()
+    def __init__(self):
+        super().__init__(0.95)
 
-        self.s = initial_state
-        self.b = initial_belief
-        self.o = [] # List[StudentObservation]
-
-        # Q and U are used for planning, and are optional
-        self.Q = {}
-        self.U = {}
     
-    def action(self):
-        """
-        Returns the student action based on their current beliefs and prior
-        observations.
-        """
-        raise NotImplementedError("action not implemented")
-    
-    def observe(self, oi: StudentObservation):
-        """
-        Records the student observation and updates the beliefs.
-        """
-        raise NotImplementedError("observe not implemented")
-    
-    def reward(self, s: StudentState, a: StudentAction, sp: StudentState) -> float:
+    def _reward(self, s: StudentState, a: StudentAction, sp: StudentState) -> float:
         """
         Returns the reward for taking action a in state s and transitioning to 
         state sp. This should be fully determined.
         """
         raise NotImplementedError("reward not implemented")
     
-    def transition(self, s: StudentState, a: StudentAction, sp: StudentState) -> dict[StudentState, float]:
+
+    def transition(self, s: StudentState, a: StudentAction) -> dict[StudentState, float]:
         """
         Returns the probability of transitioning to state sp when taking action
         a in state s.
         """
         raise NotImplementedError("transition not implemented")
+    
     
     def lookahead(self, b: dict[StudentState, float], a: StudentAction) -> float:
         """
