@@ -49,12 +49,39 @@ def make_memoryless(π: Policy):
     return out
 
 
-class UtilityFunction:
+class StateUtilityFunction:
     def __getitem__(self, s: State):
         raise NotImplementedError("utility not implemented")
     
     def __setitem__(self, s: State, u: float):
         raise NotImplementedError("utility not implemented")
+
+class UtilityFunction:
+    def __getitem__(self, b):
+        raise NotImplementedError("utility not implemented")
+    
+    def __setitem__(self, b, u: float):
+        raise NotImplementedError("utility not implemented")
+
+def make_belief_utility(U: StateUtilityFunction):
+    def get(self, b):
+        states = list(b.keys())
+        probs = np.array([b[s] for s in states])
+        utils = np.array([U[s] for s in states])
+        return np.dot(probs, utils)
+    
+    def set(self, b, u: float):
+        states = list(b.keys())
+        probs = np.array([b[s] for s in states])
+        utils = np.array([U[s] for s in states])
+        for i in range(len(states)):
+            U[states[i]] = u * probs[i] / utils[i]
+
+    out = UtilityFunction()
+    out.__getitem__ = lambda b: get(out, b)
+    out.__setitem__ = lambda b, u: set(out, b, u)
+    return out
+    
 
 # ------------------------------------------------------------------------------
 # POMDP class with some logic implemented
@@ -88,29 +115,74 @@ class POMDP:
         raise NotImplementedError("transition not implemented")
     
 
-    def observation(self, a: Action, sp: State) -> Observation:
+    def observation(self, a: Action, sp: State) -> dict[Observation, float]:
         """
-        Returns the observation for taking action a and transitioning to state
-        sp.
+        Returns the probability of each observation for taking action a and 
+        transitioning to state sp.
         """
         raise NotImplementedError("observation not implemented")
         
 
-    def lookahead(self, s: State, a: Action, U: UtilityFunction) -> float:
+    def lookahead_state(self, s: State, a: Action, U: StateUtilityFunction) -> float:
         """
         Calculates the expected utility of taking action a from state s.
 
         params
             s -- the current state
             a -- action to take
-            U -- a dictionary mapping states to their expected utility
+            U -- a StateUtilityFunction mapping states to their expected utility
         """
         return self.reward(s, a) + self.discount * sum(
             prob * U[sp] for (sp, prob) in self.transition(s, a).items()
         )
+    
+
+    def lookahead(self, b, a: Action, U: UtilityFunction, update):
+        """
+        Looks ahead using the transition and observation model and calculates
+        the expected utility of taking action a from belief state b.
+
+        params:
+            b -- the current belief state
+            a -- action to take
+            U -- a UtilityFunction mapping beliefs to their expected utility
+            update -- a function that accepts b, a, o and returns the new belief
+                      state
+        """
+        def obs_prob(o, b, a):
+            """
+            The probability of observation o given belief state b and action a.
+            """
+            # we could actually be in a number of states
+            states = list(b.keys())
+            beliefs = np.array([b[s] for s in states])
+
+            # the probability of observing o from each of the states...
+            probs = []
+            for s in states:
+                # ...depends on the transition model...
+                T = self.transition(s, a)
+                sps = list(T.keys())
+                t_probs = np.array([T[sp] for sp in sps])
+
+                # ...and the observation model.
+                o_probs = np.array([self.observation(a, sp)[o] for sp in sps])
+                probs.append(np.dot(t_probs, o_probs))
+
+            return np.dot(beliefs, probs)
+
+        # calculate the support of the observation distribution
+        O = set()
+        for s in b:
+            O |= set(self.observation(a, s).keys())
+
+        # calculate the expected utility
+        return self.reward(b, a) + self.discount * sum(
+            obs_prob(o, b, a) * U[update(b, a, o)] for o in O
+        )
 
 
-    def reward(self, s: State, a: Action) -> float:
+    def reward_state(self, s: State, a: Action) -> float:
         """
         Returns the expected reward for taking action a in state s.
 
@@ -122,6 +194,20 @@ class POMDP:
         for (sp, prob) in self.transition(s, a).items():
             out += prob * self._reward(s, a, sp)
         return out
+
+
+    def reward(self, b, a: Action) -> float:
+        """
+        Returns the expected reward given the belief state b and action a.
+
+        params:
+            b -- our beliefs about the current state
+            a -- the action performed in this belief state
+        """
+        states = b.keys()
+        probs = np.array([b[s] for s in states])
+        rewards = np.array([self.reward_state(s, a) for s in states])
+        return np.dot(probs, rewards)
 
 
     def rollout(self, s: State, o: Observation, π: Policy, d: int = 10) -> float:

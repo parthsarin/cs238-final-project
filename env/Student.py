@@ -110,7 +110,7 @@ class Student(POMDP):
     def _reward(self, s: StudentState, a: StudentAction, sp: StudentState) -> float:
         """
         Returns the reward for taking action a in state s and transitioning to 
-        state sp. This should be fully determined.
+        state sp. Relative to |S|, |A|, and |O|, this should be O(1).
         """
         raise NotImplementedError("reward not implemented")
     
@@ -118,14 +118,15 @@ class Student(POMDP):
     def transition(self, s: StudentState, a: StudentAction) -> dict[StudentState, float]:
         """
         Returns the probability of transitioning to state sp when taking action
-        a in state s.
+        a in state s. Relative to |S|, |A|, and |O|, this should be O(1).
         """
         raise NotImplementedError("transition not implemented")
 
     
-    def observation(self, a: StudentAction, sp: StudentState) -> Observation:
+    def observation(self, a: StudentAction, sp: StudentState) -> dict[StudentObservation, float]:
         """
-        Returns the observation for taking action a and transitioning to state
-        sp.
+        Returns the probability of each observation for taking action a and 
+        transitioning to state sp. Relative to |S|, |A|, and |O|, this should be
+        O(1).
         """
         raise NotImplementedError("observation not implemented")
