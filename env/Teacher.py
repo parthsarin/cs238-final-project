@@ -1,4 +1,4 @@
-from .POMDP import POMDP, State, Action, Observation
+from .POMDP import POMDP, State, Action, Observation, random
 
 # ------------------------------------------------------------------------------
 # state, action, and observation space
@@ -32,14 +32,15 @@ class TeacherState(State):
         prod -- [0, 1]
         g -- [0, 1]
         free_time -- [0, 7]
-    
+        num_assignments -- [0, 100]
     The free time is fully observable, but the other three are not.
     """
-    def __init__(self, mh, prod, g: float, free_time):
+    def __init__(self, mh, prod, g: float, free_time, num_assignments):
         assert -1 <= mh <= 1, "mh must be in [-1, 1]"
         assert 0 <= prod <= 1, "prod must be in [0, 1]"
         assert 0 <= g <= 1, "g must be in [0, 1]"
         assert 0 <= free_time <= 7, "free_time must be in [0, 7]"
+        assert 0 <= num_assignments <= 100, "num_assignments must be in [0, 100]"
 
         self.mh = mh
         self.prod = prod
@@ -85,19 +86,38 @@ class Teacher(POMDP):
     def __init__(self):
         super().__init__(0.95)
     
+    def calculate_number_of_assignments():
+        # Random number of assignments, for example, between 0 and 100
+        return random.randint(0, 100)
+    
     def _reward(self, s: TeacherState, a: TeacherAction, sp: TeacherState) -> float:
         """
         Returns the reward for taking action a in state s and transitioning to 
         state sp. Relative to |S|, |A|, and |O|, this should be O(1).
         """
-        raise NotImplementedError("reward not implemented")
+        # Reward based on maintaining or improving mental health
+        mh_reward = sp.mh - s.mh
+        # Reward for productivity, adjusted for grading time
+        prod_reward = sp.prod * (1 + a.grading)
+        # Reward based on competence development
+        competence_reward = sp.g - s.g
+        # Penalty for not having enough free time
+        free_time_penalty = -1 if sp.free_time < 1 else 0
+        # Aggregate the rewards
+        return mh_reward + prod_reward + competence_reward + free_time_penalty
 
     def transition(self, s: TeacherState, a: TeacherAction) -> dict[TeacherState, float]:
         """
         Returns the probability of transitioning to state sp when taking action
         a in state s. Relative to |S|, |A|, and |O|, this should be O(1).
         """
-        raise NotImplementedError("transition not implemented")
+        new_mh = max(-1, min(1, s.mh + a.rest * 0.1 - a.grading * 0.05))  # Rest improves, grading slightly deteriorates mh
+        new_prod = max(0, min(1, s.prod + a.grading * 0.1))  # Grading improves productivity
+        new_g = max(0, min(1, s.g + a.pd * 0.1))  # PD improves competence
+        new_free_time = max(0, s.free_time - 1)  # Assume each action takes 1 hour
+        new_num_assignments = max(0, s.num_assignments - a.grading * 50)
+        new_state = TeacherState(new_mh, new_prod, new_g, new_free_time, new_num_assignments)
+        return {new_state: 1.0}  # Deterministic transition for simplicity
     
     def observation(self, a: TeacherAction, sp: TeacherState) -> dict[TeacherObservation, float]:
         """
@@ -105,4 +125,13 @@ class Teacher(POMDP):
         transitioning to state sp. Relative to |S|, |A|, and |O|, this should be
         O(1).
         """
-        raise NotImplementedError("observation not implemented")
+        # Calculate the number of assignments
+        # This could be based on a fixed schedule, random generation, or other logic
+        some_previous_value = self.calculate_number_of_assignments()  # Implement this function as needed
+        observed_num_assignments = max(0, some_previous_value - a.grading * 50)
+        
+        new_observation = TeacherObservation(sp.free_time, observed_num_assignments)
+        return {new_observation: 1.0}
+
+
+

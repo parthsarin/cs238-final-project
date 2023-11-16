@@ -112,15 +112,31 @@ class Student(POMDP):
         Returns the reward for taking action a in state s and transitioning to 
         state sp. Relative to |S|, |A|, and |O|, this should be O(1).
         """
-        raise NotImplementedError("reward not implemented")
-    
+        # Reward based on mental health improvement
+        mh_improvement = sp.mh - s.mh
+        # Reward for maintaining or improving productivity
+        prod_reward = 1 if sp.prod >= s.prod else -1
+        # Reward based on competencies improvement
+        competencies_improvement = sum(sp.g) - sum(s.g)
+        # Additional reward for submitting the assignment
+        submit_reward = 5 if a.submit else 0
+        # Aggregate the rewards
+        return mh_improvement + prod_reward + competencies_improvement + submit_reward
+        
 
     def transition(self, s: StudentState, a: StudentAction) -> dict[StudentState, float]:
         """
         Returns the probability of transitioning to state sp when taking action
         a in state s. Relative to |S|, |A|, and |O|, this should be O(1).
         """
-        raise NotImplementedError("transition not implemented")
+        new_mh = max(-1, min(1, s.mh + (a.rest - a.work) * 0.1))  # Assume rest improves mental health
+        new_prod = max(0, min(1, s.prod + a.work * 0.1))  # Working increases productivity
+        new_g = [min(1, gi + a.work * 0.05) for gi in s.g]  # Working improves competencies
+        new_free_time = max(0, s.free_time - 1)  # Assume each action takes 1 hour
+        new_time_worked = s.time_worked + a.work
+
+        new_state = StudentState(new_mh, new_prod, new_g, new_free_time, new_time_worked)
+        return {new_state: 1.0}  # Deterministic transition for simplicity
 
     
     def observation(self, a: StudentAction, sp: StudentState) -> dict[StudentObservation, float]:
@@ -129,4 +145,12 @@ class Student(POMDP):
         transitioning to state sp. Relative to |S|, |A|, and |O|, this should be
         O(1).
         """
-        raise NotImplementedError("observation not implemented")
+        if a.submit:
+            # Assume the grade is a function of competencies and time worked
+            grade = sum(sp.g) * 10 + sp.time_worked * 5
+            grade = max(0, min(100, grade))
+        else:
+            grade = 0  # No grade if not submitted
+
+        new_observation = StudentObservation(grade, sp.free_time)
+        return {new_observation: 1.0}  # Deterministic observation for simplicity
