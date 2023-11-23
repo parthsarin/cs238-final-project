@@ -18,11 +18,12 @@ class Assignment:
         g = s.g
         time_worked = s.time_worked
 
-        # add code here
-        self.submitted = True
+        # also making quality = value between 0 - 100
         quality = 1 - (time_worked - sum(g))/time_worked
         quality *= 100
-        return max(0, min(100, quality)) # also making quality = value between 0 - 100
+        self.quality = max(0, min(100, quality))
+
+        self.submitted = True
     
     def grade(self, t: TeacherState):
         """
@@ -34,7 +35,7 @@ class Assignment:
         mh = t.mh # between -1 and 1
         difficulty = self.difficulty # between 0 and 1
 
-        grade = 70
+        grade = self.quality
         grade += 15 * (mh + 1) # so that mh > 0
         grade -= 15 * difficulty
         return max(0, min(100, grade))
@@ -61,6 +62,7 @@ class Classroom:
         s, o = self._initialize_teacher()
         self.teacher_s = s
         self.teacher_o = [o]
+        self.ungraded_assignments = 0
 
     
     def _initialize_student(self) -> Tuple[StudentState, StudentObservation]:
@@ -70,15 +72,17 @@ class Classroom:
         initial_mh = random.uniform(-1, 1)
         initial_prod = random.uniform(0, 1)
         initial_g = [random.uniform(0, 1) for _ in range(8)]  # adjust number of competencies via range(x)
-        initial_free_time = random.uniform(0, 7)
+        initial_free_time = round(random.uniform(0, 7))
         initial_time_worked = 0  # no time worked initially
 
         # create initial student state
-        initial_student_state = StudentState(initial_mh, initial_prod, initial_g, initial_free_time,
-                                             initial_time_worked)
+        initial_student_state = StudentState(
+            initial_mh, initial_prod, initial_g, initial_free_time,
+            initial_time_worked, []
+        )
 
         # create initial student observation
-        initial_observation = StudentObservation(0, initial_free_time)  # initial grade set to 0
+        initial_observation = StudentObservation(None, initial_free_time)
 
         return initial_student_state, initial_observation
 
@@ -90,7 +94,7 @@ class Classroom:
         initial_prod = random.uniform(0, 1)
         initial_g = random.uniform(0, 1)
         initial_free_time = random.uniform(0, 7)
-        initial_num_assignments = self.calculate_number_of_assignments()
+        initial_num_assignments = 0
 
         # create initial teacher state
         initial_teacher_state = TeacherState(initial_mh, initial_prod, initial_g, initial_free_time,
@@ -100,6 +104,38 @@ class Classroom:
         initial_observation = TeacherObservation(initial_free_time, initial_num_assignments)
 
         return initial_teacher_state, initial_observation
+
+
+    @staticmethod
+    def _sample_from_weights_dict(weights_dict: dict[object, float]) -> object:
+        """
+        Samples an object from the weights_dict, where the weights_dict maps
+        objects to their weights.
+        """
+        objects, weights = zip(*weights_dict.items())
+        return random.choices(objects, weights)[0]
+
+
+
+    def s_transition(self, s: StudentState, a: StudentAction) -> StudentState:
+        """
+        Returns the next state of the student after taking action a in state s.
+        """
+        new_mh = max(-1, min(1, s.mh + (a.rest - a.work) * 0.1))
+        new_prod = max(0, min(1, s.prod + a.work * 0.1))
+        new_g = [min(1, gi + a.work * 0.05) for gi in s.g]
+        new_assign_durations = s.assign_durations
+
+        if a.submit:
+            new_time_worked = 0
+            new_assign_durations.append(s.time_worked)
+        else:
+            new_time_worked = s.time_worked + a.work * s.free_time
+
+        return StudentState(
+            new_mh, new_prod, new_g, random.randint(0, 7), 
+            new_time_worked, new_assign_durations
+        )
 
 
     def student_step(self, actions: List[StudentAction]) -> List[float]:
@@ -127,35 +163,52 @@ class Classroom:
 
         for i, action in enumerate(actions):
             student_state = self.student_s[i]
-            student_observation = self.student_o[i][-1]  # Get the latest observation
 
             # student step
-            new_student_state_dict = self.s_logic.step(student_state, action)
-            new_student_state, _ = next(iter(new_student_state_dict.items()))
+            new_student_state = self.s_transition(student_state, action)
 
             # check if the student submitted an assignment
             if action.submit:
                 # create new assignment and add to student's list of assignments
-                assignment_quality = self.s_logic.submit(new_student_state)
-                # initialize difficulty as random value between 0 and 1
-                difficulty = random()
-                new_assignment = Assignment(assignment_quality, difficulty)
-                self.student_s.assignments[i].append(new_assignment)
+                assign = Assignment(random())
+                assign.submit(student_state)
 
-                # update teacher state and observation
-                self.teacher_s.num_assignments -= 1
-                self.teacher_o[0].num_assignments = self.teacher_s.num_assignments
+                # log the assignments
+                self.assignments[i].append(assign)
+                self.ungraded_assignments += 1
 
             # calculate reward for the student
-            reward = self.s_logic.calculate_reward(student_state, action, new_student_state)
+            reward = self.s_logic._reward(student_state, action, new_student_state)
             rewards.append(reward)
 
-            # update student state and observation lists
+            # update student state
             self.student_s[i] = new_student_state
-            self.student_o[i].append(self.s_logic.observe(action, new_student_state))
+
+            # sample an observation from the student's observation model
+            self.student_o[i].append(self._sample_from_weights_dict(
+                self.s_logic.observation(action, new_student_state)
+            ))
 
         return rewards
     
+    def t_transition(self, s: TeacherState, a: TeacherAction) -> TeacherState:
+        """
+        Returns the next state of the teacher after taking action a in state s.
+        """
+        new_mh = max(-1, min(1, s.mh + a.rest * 0.1 - a.grading * 0.05))
+        new_prod = max(0, min(1, s.prod + a.grading * 0.1))
+        new_g = max(0, min(1, s.g + a.pd * 0.1))
+
+        time_grading = a.grading * s.free_time
+        assignments_per_hour = 1 + s.g * 2
+        assignments_graded = round(time_grading * assignments_per_hour)
+        new_num_assignments = max(0, s.num_assignments - assignments_graded)
+
+        return TeacherState(
+            new_mh, new_prod, new_g, random.randint(0, 7), 
+            new_num_assignments
+        )
+
     def teacher_step(self, a: TeacherAction) -> float:
         """
         Performs a step for the teacher. Updates self.teacher_s and appends the
@@ -172,14 +225,15 @@ class Classroom:
         teacher_state = self.teacher_s
 
         # teacher step
-        new_teacher_state_dict = self.t_logic.step(teacher_state, a)
-        new_teacher_state, _ = next(iter(new_teacher_state_dict.items()))
+        new_teacher_state = self.t_transition(teacher_state, a)
 
         # calculate reward for teacher
-        reward = self.t_logic.calculate_reward(teacher_state, a, new_teacher_state)
+        reward = self.t_logic._reward(teacher_state, a, new_teacher_state)
 
         # update teacher state and observation lists
         self.teacher_s = new_teacher_state
-        self.teacher_o.append(self.t_logic.observe(a, new_teacher_state))
+        self.teacher_o.append(self._sample_from_weights_dict(
+            self.t_logic.observation(a, new_teacher_state)
+        ))
 
         return reward
