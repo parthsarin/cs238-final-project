@@ -46,16 +46,18 @@ class TeacherState(State):
         self.prod = prod
         self.g = g
         self.free_time = free_time
+        self.num_assignments = num_assignments
     
     def __hash__(self):
-        return hash((self.mh, self.prod, self.g, self.free_time))
+        return hash((self.mh, self.prod, self.g, self.free_time, self.num_assignments))
 
     def __eq__(self, other: object) -> bool:
         return all([
             self.mh == other.mh,
             self.prod == other.prod,
             self.g == other.g,
-            self.free_time == other.free_time
+            self.free_time == other.free_time,
+            self.num_assignments == other.num_assignments
         ])
     
 class TeacherObservation(Observation):
@@ -86,10 +88,6 @@ class Teacher(POMDP):
     def __init__(self):
         super().__init__(0.95)
     
-    def calculate_number_of_assignments():
-        # Random number of assignments, for example, between 0 and 100
-        return random.randint(0, 100)
-    
     def _reward(self, s: TeacherState, a: TeacherAction, sp: TeacherState) -> float:
         """
         Returns the reward for taking action a in state s and transitioning to 
@@ -114,10 +112,12 @@ class Teacher(POMDP):
         new_mh = max(-1, min(1, s.mh + a.rest * 0.1 - a.grading * 0.05))  # Rest improves, grading slightly deteriorates mh
         new_prod = max(0, min(1, s.prod + a.grading * 0.1))  # Grading improves productivity
         new_g = max(0, min(1, s.g + a.pd * 0.1))  # PD improves competence
-        new_free_time = max(0, s.free_time - 1)  # Assume each action takes 1 hour
         new_num_assignments = max(0, s.num_assignments - a.grading * 50)
-        new_state = TeacherState(new_mh, new_prod, new_g, new_free_time, new_num_assignments)
-        return {new_state: 1.0}  # Deterministic transition for simplicity
+
+        return {
+            TeacherState(new_mh, new_prod, new_g, ft, new_num_assignments): 1/8
+            for ft in range(8)
+        }
     
     def observation(self, a: TeacherAction, sp: TeacherState) -> dict[TeacherObservation, float]:
         """
@@ -125,13 +125,10 @@ class Teacher(POMDP):
         transitioning to state sp. Relative to |S|, |A|, and |O|, this should be
         O(1).
         """
-        # Calculate the number of assignments
-        # This could be based on a fixed schedule, random generation, or other logic
-        some_previous_value = self.calculate_number_of_assignments()  # Implement this function as needed
-        observed_num_assignments = max(0, some_previous_value - a.grading * 50)
-        
-        new_observation = TeacherObservation(sp.free_time, observed_num_assignments)
-        return {new_observation: 1.0}
+        # full visibility into free time and number of assignments
+        return {
+            TeacherObservation(sp.free_time, sp.num_assignments): 1.0
+        }
 
 
 
