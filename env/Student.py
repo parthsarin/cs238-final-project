@@ -1,5 +1,6 @@
 from .POMDP import POMDP, State, Action, Observation
 from typing import Union, List
+import numpy as np
 
 # ------------------------------------------------------------------------------
 # state, action, and observation spaces
@@ -50,8 +51,12 @@ class StudentState(State):
     g -- list of competencies, in [0, 1]
     free_time -- free time, in [0, 7]
     time_worked -- the total amount of time spent working on the current assignment
+    assign_durations -- a list of the total amount of time spent working on each assignment
     """
-    def __init__(self, mh, prod, g: List[float], free_time, time_worked):
+    def __init__(
+            self, mh: float, prod: float, g: List[float], free_time: int, 
+            time_worked: float, assign_durations: List[float]
+        ):
         super().__init__()
 
         assert -1 <= mh <= 1, "mh must be in [-1, 1]"
@@ -64,9 +69,13 @@ class StudentState(State):
         self.g = g
         self.free_time = free_time
         self.time_worked = time_worked
+        self.assign_durations = assign_durations
     
     def __hash__(self):
-        return hash((self.mh, self.prod, tuple(self.g), self.free_time, self.time_worked))
+        return hash((
+            self.mh, self.prod, tuple(self.g), self.free_time, 
+            self.time_worked, tuple(self.assign_durations)
+        ))
     
     def __eq__(self, other: object) -> bool:
         return all([
@@ -74,7 +83,8 @@ class StudentState(State):
             self.prod == other.prod, 
             self.g == other.g, 
             self.free_time == other.free_time,
-            self.time_worked == other.time_worked
+            self.time_worked == other.time_worked,
+            self.assign_durations == other.assign_durations
         ])
 
 
@@ -86,7 +96,7 @@ class StudentObservation(Observation):
     def __init__(self, assignment_grade, free_time):
         super().__init__()
 
-        assert 0 <= assignment_grade <= 100, "assignment_grade must be in [0, 100]"
+        assert assignment_grade is None or 0 <= assignment_grade <= 100, "assignment_grade must be None or in [0, 100]"
         assert 0 <= free_time <= 7, "free_time must be in [0, 7]"
 
         self.assignment_grade = assignment_grade
@@ -112,15 +122,40 @@ class Student(POMDP):
         Returns the reward for taking action a in state s and transitioning to 
         state sp. Relative to |S|, |A|, and |O|, this should be O(1).
         """
-        raise NotImplementedError("reward not implemented")
-    
+        # Reward based on mental health improvement
+        mh_improvement = sp.mh - s.mh
+        # Reward for maintaining or improving productivity
+        prod_reward = sp.prod - s.prod
+        # Reward based on competencies improvement
+        competencies_improvement = sum(sp.g) - sum(s.g)
+        # Aggregate the rewards
+        return mh_improvement + prod_reward + competencies_improvement
+        
 
     def transition(self, s: StudentState, a: StudentAction) -> dict[StudentState, float]:
         """
         Returns the probability of transitioning to state sp when taking action
         a in state s. Relative to |S|, |A|, and |O|, this should be O(1).
         """
-        raise NotImplementedError("transition not implemented")
+        new_mh = max(-1, min(1, s.mh + (a.rest - a.work) * 0.1))  # Assume rest improves mental health
+        new_prod = max(0, min(1, s.prod + a.work * 0.1))  # Working increases productivity
+        new_g = [min(1, gi + a.work * 0.05) for gi in s.g]  # Working improves competencies
+        new_assign_durations = s.assign_durations
+
+        if a.submit:
+            new_time_worked = 0
+            new_assign_durations.append(s.time_worked)
+        else:
+            new_time_worked = s.time_worked + a.work * s.free_time
+
+        # 8 possible free time values, each with equal probability
+        return {
+            StudentState(
+                new_mh, new_prod, new_g, ft, 
+                new_time_worked, new_assign_durations
+            ): 1/8
+            for ft in range(8)
+        }
 
     
     def observation(self, a: StudentAction, sp: StudentState) -> dict[StudentObservation, float]:
@@ -129,4 +164,26 @@ class Student(POMDP):
         transitioning to state sp. Relative to |S|, |A|, and |O|, this should be
         O(1).
         """
-        raise NotImplementedError("observation not implemented")
+        if a.submit:
+            # Assume the grade is a function of competencies and time worked
+            time_worked = sp.assign_durations[-1]
+            quality = 1 - (time_worked - sum(sp.g)) / time_worked
+            quality *= 100
+            quality = max(0, min(100, quality))
+
+            # the mean grade
+            grade = max(0, min(100, grade))
+            
+            # draw 20 samples from a normal distribution with noise
+            noisy_grades = np.random.normal(grade, 10, 20)
+
+            # clip the grades to be in [0, 100]
+            noisy_grades = np.clip(noisy_grades, 0, 100)
+
+            return {
+                StudentObservation(grade, sp.free_time): 1/20
+                for grade in noisy_grades
+            }
+
+        # otherwise, it's just the free time
+        return {StudentObservation(None, sp.free_time): 1.0}
