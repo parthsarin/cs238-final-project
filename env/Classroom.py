@@ -98,7 +98,7 @@ class Classroom:
         initial_mh = random.uniform(-1, 1)
         initial_prod = random.uniform(0, 1)
         initial_g = random.uniform(0, 1)
-        initial_free_time = random.uniform(0, 7)
+        initial_free_time = round(random.uniform(0, 7))
         initial_num_assignments = 0
 
         # create initial teacher state
