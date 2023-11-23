@@ -1,6 +1,7 @@
 from .POMDP import POMDP, State, Action, Observation
 from typing import Union, List
 import numpy as np
+from itertools import product
 
 # ------------------------------------------------------------------------------
 # state, action, and observation spaces
@@ -86,6 +87,10 @@ class StudentState(State):
             self.time_worked == other.time_worked,
             self.assign_durations == other.assign_durations
         ])
+    
+    def __repr__(self):
+        # round the values to 3 decimal places
+        return f"StudentState(mh = {round(self.mh, 3)}, prod = {round(self.prod, 3)}, g = {list(map(lambda x: round(x, 3), self.g))}, ft = {self.free_time}, tw = {round(self.time_worked, 3)}, ad = {list(map(lambda x: round(x, 3), self.assign_durations))})"
 
 
 class StudentObservation(Observation):
@@ -107,12 +112,20 @@ class StudentObservation(Observation):
     
     def __eq__(self, other: object) -> bool:
         return self.assignment_grade == other.assignment_grade and self.free_time == other.free_time
+    
+    def __repr__(self):
+        return f"StudentObservation(grade = {self.assignment_grade}, ft = {self.free_time})"
 
 
 # ------------------------------------------------------------------------------
 # student class and logic
 # ------------------------------------------------------------------------------
 class Student(POMDP):
+    MH_PROD_COVARIANCE = np.array([
+        [0.1, -0.05],
+        [-0.05, 0.1]
+    ])
+
     def __init__(self):
         super().__init__(0.95)
 
@@ -137,24 +150,44 @@ class Student(POMDP):
         Returns the probability of transitioning to state sp when taking action
         a in state s. Relative to |S|, |A|, and |O|, this should be O(1).
         """
-        new_mh = max(-1, min(1, s.mh + (a.rest - a.work) * 0.1))  # Assume rest improves mental health
-        new_prod = max(0, min(1, s.prod + a.work * 0.1))  # Working increases productivity
-        new_g = [min(1, gi + a.work * 0.05) for gi in s.g]  # Working improves competencies
-        new_assign_durations = s.assign_durations
-
         if a.submit:
-            new_time_worked = 0
-            new_assign_durations.append(s.time_worked)
-        else:
-            new_time_worked = s.time_worked + a.work * s.free_time
+            return {
+                StudentState(
+                    max(-1, min(1, s.mh + 0.01)), 
+                    s.prod,
+                    s.g, 
+                    ft, 
+                    0, 
+                    s.assign_durations + [s.time_worked]
+                ): 1/8
+                for ft in range(8)
+            }
+
+        # rest improves mh, working improves productivity
+        new_mh = max(-1, min(1, s.mh + a.rest * 0.1))
+        new_prod = max(0, min(1, s.prod + a.work * 0.1))
+
+        # take 10 samples from a multivariate normal distribution
+        mh_prod = np.random.multivariate_normal(
+            [new_mh, new_prod], self.MH_PROD_COVARIANCE, 10
+        )
+        np.clip(mh_prod[:, 0], -1, 1, out=mh_prod[:, 0])
+        np.clip(mh_prod[:, 1], 0, 1, out=mh_prod[:, 1])
+
+        # working improves competencies
+        new_g = [min(1, gi + a.work * 0.05) for gi in s.g]
+
+        # add on the time worked
+        new_assign_durations = s.assign_durations.copy()
+        new_time_worked = s.time_worked + a.work * s.free_time
 
         # 8 possible free time values, each with equal probability
         return {
             StudentState(
-                new_mh, new_prod, new_g, ft, 
+                mhp_sample[0], mhp_sample[1], new_g, ft, 
                 new_time_worked, new_assign_durations
             ): 1/8
-            for ft in range(8)
+            for mhp_sample, ft in product(mh_prod, range(8))
         }
 
     
@@ -167,12 +200,12 @@ class Student(POMDP):
         if a.submit:
             # Assume the grade is a function of competencies and time worked
             time_worked = sp.assign_durations[-1]
-            quality = 1 - (time_worked - sum(sp.g)) / time_worked
+            quality = sum(sp.g) + time_worked
             quality *= 100
             quality = max(0, min(100, quality))
 
             # the mean grade
-            grade = max(0, min(100, grade))
+            grade = max(0, min(100, quality))
             
             # draw 20 samples from a normal distribution with noise
             noisy_grades = np.random.normal(grade, 10, 20)
