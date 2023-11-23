@@ -1,6 +1,8 @@
 from .Student import Student, StudentState, StudentObservation, StudentAction
 from .Teacher import Teacher, TeacherState, TeacherObservation, TeacherAction
 from typing import List, Tuple
+import numpy as np
+import random
 
 class Assignment:
     def __init__(self, difficulty: float):
@@ -17,18 +19,25 @@ class Assignment:
         time_worked = s.time_worked
 
         # add code here
-
         self.submitted = True
-        raise NotImplementedError("submit not implemented")
+        quality = 1 - (time_worked - sum(g))/time_worked
+        quality *= 100
+        return max(0, min(100, quality)) # also making quality = value between 0 - 100
     
     def grade(self, t: TeacherState):
         """
         Calculates the grade of the assignment based on the teacher's mh value
         and the assignment's difficulty.
+
         """
         assert self.submitted, "assignment must be submitted before grading"
-        raise NotImplementedError("grade not implemented")
+        mh = t.mh # between -1 and 1
+        difficulty = self.difficulty # between 0 and 1
 
+        grade = 70
+        grade += 15 * (mh + 1) # so that mh > 0
+        grade -= 15 * difficulty
+        return max(0, min(100, grade))
 
 class Classroom:
     """
@@ -58,14 +67,39 @@ class Classroom:
         """
         Creates an initial student.
         """
-        raise NotImplementedError("initialize_student not implemented")
-    
+        initial_mh = random.uniform(-1, 1)
+        initial_prod = random.uniform(0, 1)
+        initial_g = [random.uniform(0, 1) for _ in range(8)]  # adjust number of competencies via range(x)
+        initial_free_time = random.uniform(0, 7)
+        initial_time_worked = 0  # no time worked initially
+
+        # create initial student state
+        initial_student_state = StudentState(initial_mh, initial_prod, initial_g, initial_free_time,
+                                             initial_time_worked)
+
+        # create initial student observation
+        initial_observation = StudentObservation(0, initial_free_time)  # initial grade set to 0
+
+        return initial_student_state, initial_observation
 
     def _initialize_teacher(self) -> Tuple[TeacherState, TeacherObservation]:
         """
         Creates an initial teacher.
         """
-        raise NotImplementedError("initialize_teacher not implemented")
+        initial_mh = random.uniform(-1, 1)
+        initial_prod = random.uniform(0, 1)
+        initial_g = random.uniform(0, 1)
+        initial_free_time = random.uniform(0, 7)
+        initial_num_assignments = self.calculate_number_of_assignments()
+
+        # create initial teacher state
+        initial_teacher_state = TeacherState(initial_mh, initial_prod, initial_g, initial_free_time,
+                                             initial_num_assignments)
+
+        # create initial teacher observation
+        initial_observation = TeacherObservation(initial_free_time, initial_num_assignments)
+
+        return initial_teacher_state, initial_observation
 
 
     def student_step(self, actions: List[StudentAction]) -> List[float]:
@@ -89,7 +123,38 @@ class Classroom:
             rewards -- the rewards for each student, where rewards[i] is the
                        reward corresponding to student i
         """
-        raise NotImplementedError("student_step not implemented")
+        rewards = []
+
+        for i, action in enumerate(actions):
+            student_state = self.student_s[i]
+            student_observation = self.student_o[i][-1]  # Get the latest observation
+
+            # student step
+            new_student_state_dict = self.s_logic.step(student_state, action)
+            new_student_state, _ = next(iter(new_student_state_dict.items()))
+
+            # check if the student submitted an assignment
+            if action.submit:
+                # create new assignment and add to student's list of assignments
+                assignment_quality = self.s_logic.submit(new_student_state)
+                # initialize difficulty as random value between 0 and 1
+                difficulty = random()
+                new_assignment = Assignment(assignment_quality, difficulty)
+                self.student_s.assignments[i].append(new_assignment)
+
+                # update teacher state and observation
+                self.teacher_s.num_assignments -= 1
+                self.teacher_o[0].num_assignments = self.teacher_s.num_assignments
+
+            # calculate reward for the student
+            reward = self.s_logic.calculate_reward(student_state, action, new_student_state)
+            rewards.append(reward)
+
+            # update student state and observation lists
+            self.student_s[i] = new_student_state
+            self.student_o[i].append(self.s_logic.observe(action, new_student_state))
+
+        return rewards
     
     def teacher_step(self, a: TeacherAction) -> float:
         """
@@ -103,4 +168,18 @@ class Classroom:
         returns:
             reward -- the reward that the teacher receives
         """
-        raise NotImplementedError("teacher_step not implemented")
+        # get most updated teacher state
+        teacher_state = self.teacher_s
+
+        # teacher step
+        new_teacher_state_dict = self.t_logic.step(teacher_state, a)
+        new_teacher_state, _ = next(iter(new_teacher_state_dict.items()))
+
+        # calculate reward for teacher
+        reward = self.t_logic.calculate_reward(teacher_state, a, new_teacher_state)
+
+        # update teacher state and observation lists
+        self.teacher_s = new_teacher_state
+        self.teacher_o.append(self.t_logic.observe(a, new_teacher_state))
+
+        return reward
