@@ -147,7 +147,7 @@ class Student(POMDP):
 
     def _reward(self, s: StudentState, a: StudentAction, sp: StudentState) -> float:
         """
-        Returns the reward for taking action a in state s and transitioning to 
+        Returns the reward for taking action a in state s and transitioning to
         state sp. Relative to |S|, |A|, and |O|, this should be O(1).
         """
         # Reward based on mental health improvement
@@ -210,13 +210,13 @@ class Student(POMDP):
             StudentState(
                 mhp_sample[0], mhp_sample[1], new_g, ft, s.num_assignments,
                 new_time_worked, new_assign_durations
-            ): 1/8
+            ): 1/(8 * len(mh_prod))
             for mhp_sample, ft in product(mh_prod, range(8))
         }
 
     def observation(self, a: StudentAction, sp: StudentState) -> dict[StudentObservation, float]:
         """
-        Returns the probability of each observation for taking action a and 
+        Returns the probability of each observation for taking action a and
         transitioning to state sp. Relative to |S|, |A|, and |O|, this should be
         O(1).
         """
