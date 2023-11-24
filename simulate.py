@@ -1,4 +1,6 @@
-from sys import argv
+import pandas as pd
+from tqdm import tqdm
+
 from env import Classroom, Policy
 from evaluate import Log
 from evaluate.plot import plot_rs
@@ -51,26 +53,28 @@ def main():
     from policy.RandomPolicy import StudentPolicy, TeacherPolicy
     sπ = StudentPolicy()
     tπ = TeacherPolicy()
-    l_random = simulate(35, 365, sπ, tπ)
 
-    from policy.Always import StudentAlwaysWork, TeacherAlwaysGrade
-    sπ = StudentAlwaysWork()
-    tπ = TeacherAlwaysGrade()
-    l_always_work = simulate(35, 365, sπ, tπ)
+    s_dfs, t_dfs = [], []
+    for _ in tqdm(range(50)):
+        l_random = simulate(35, 365, sπ, tπ)
 
-    from policy.Always import StudentAlwaysRest, TeacherAlwaysRest
-    sπ = StudentAlwaysRest()
-    tπ = TeacherAlwaysRest()
-    l_always_rest = simulate(35, 365, sπ, tπ)
+        t_dfs.append(l_random.t_oar_memoryless())
+        s_dfs.append(l_random.s_oar_memoryless())
 
-    plot_rs(
-        [l_random, l_always_work, l_always_rest],
-        [
-            ("random policy", "random policy"),
-            ("always work", "always grade"),
-            ("always rest", "always rest")
-        ]
-    )
+    df = pd.concat(t_dfs)
+    df.to_csv('data/teacher-random.csv', index=False)
+
+    df = pd.concat(s_dfs)
+    df.to_csv('data/student-random.csv', index=False)
+
+    # plot_rs(
+    #     [l_random, l_always_work, l_always_rest],
+    #     [
+    #         ("random policy", "random policy"),
+    #         ("always work", "always grade"),
+    #         ("always rest", "always rest")
+    #     ]
+    # )
 
 
 if __name__ == '__main__':
