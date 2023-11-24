@@ -3,11 +3,10 @@ from typing import Union, List
 import numpy as np
 from itertools import product
 
+
 # ------------------------------------------------------------------------------
 # state, action, and observation spaces
 # ------------------------------------------------------------------------------
-
-
 class StudentAction(Action):
     """
     Defines the action space for the student. Students can either submit or not

@@ -1,7 +1,13 @@
 from random import random
 import numpy as np
 
-from env import MemorylessPolicy, TeacherObservation, StudentObservation, StudentAction, TeacherAction
+from env import (
+    MemorylessPolicy,
+    TeacherObservation,
+    StudentObservation,
+    StudentAction,
+    TeacherAction
+)
 
 
 class StudentPolicy(MemorylessPolicy):

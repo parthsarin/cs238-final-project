@@ -1,9 +1,10 @@
 from sys import argv
 from env import Classroom, Policy
 from evaluate import Log
+from evaluate.plot import plot_rs
 
 
-def start_simulation(
+def simulate(
     n_students: float,
     d: int,
     sπ: Policy,
@@ -21,7 +22,9 @@ def start_simulation(
     """
     c = Classroom(n_students)
     l = Log(c)
-    l.log(-1)  # log initial state
+
+    # record initial state
+    l.record(-1)
 
     for t in range(d):
         # 1. student actions
@@ -32,34 +35,43 @@ def start_simulation(
         teacher_a = tπ[c.teacher_o]
         teacher_r = c.teacher_step(teacher_a, t)
 
-        # 3. log results
-        l.log(
+        # 3. record results
+        l.record(
             t,
             teacher_a=teacher_a,
             teacher_r=teacher_r,
             student_as=student_as,
             student_rs=student_rs
         )
-    print(l.s_oar_memoryless())
+
+    return l
 
 
-def main(strategy):
-    strategy = strategy.lower()
-    if strategy == 'random':
-        from policy.RandomPolicy import StudentPolicy, TeacherPolicy
-    else:
-        raise ValueError(f"Unrecognized strategy: {strategy}")
-
+def main():
+    from policy.RandomPolicy import StudentPolicy, TeacherPolicy
     sπ = StudentPolicy()
     tπ = TeacherPolicy()
+    l_random = simulate(35, 365, sπ, tπ)
 
-    start_simulation(35, 365, sπ, tπ)
+    from policy.Always import StudentAlwaysWork, TeacherAlwaysGrade
+    sπ = StudentAlwaysWork()
+    tπ = TeacherAlwaysGrade()
+    l_always_work = simulate(35, 365, sπ, tπ)
+
+    from policy.Always import StudentAlwaysRest, TeacherAlwaysRest
+    sπ = StudentAlwaysRest()
+    tπ = TeacherAlwaysRest()
+    l_always_rest = simulate(35, 365, sπ, tπ)
+
+    plot_rs(
+        [l_random, l_always_work, l_always_rest],
+        [
+            ("random policy", "random policy"),
+            ("always work", "always grade"),
+            ("always rest", "always rest")
+        ]
+    )
 
 
 if __name__ == '__main__':
-    if len(argv) != 2:
-        print("Usage: python simulate.py <strategy>")
-        exit(1)
-
-    strategy = argv[1]
-    main(strategy)
+    main()
