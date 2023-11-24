@@ -109,7 +109,12 @@ class Log:
         """
         obs = [s.teacher_o for s in self.history]
         return [
-            (obs[:i], s.teacher_a, s.teacher_r) 
+            {
+                'observations': obs[:i], 
+                **s.teacher_a, 
+                'reward': s.teacher_r,
+                'day': s.t,
+            }
             for i, s in enumerate(self.history[1:])
         ]
     
@@ -120,6 +125,12 @@ class Log:
         """
         obs = [s.student_o for s in self.history]
         return [
-            (obs[:i], s.student_a, s.student_r) 
+            {
+                'obs': tup[0],
+                **tup[1],
+                'reward': tup[2],
+                'day': i,
+            }
             for i, s in enumerate(self.history[1:])
+            for tup in zip(obs[:i], s.student_a, s.student_r)
         ]

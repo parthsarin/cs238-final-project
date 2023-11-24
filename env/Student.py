@@ -6,6 +6,8 @@ from itertools import product
 # ------------------------------------------------------------------------------
 # state, action, and observation spaces
 # ------------------------------------------------------------------------------
+
+
 class StudentAction(Action):
     """
     Defines the action space for the student. Students can either submit or not
@@ -13,12 +15,13 @@ class StudentAction(Action):
     they must choose how to allocate their remaining time between resting and
     working (numbers which add up to 1).
     """
+
     def __init__(
-            self, 
-            submit: bool = False,
-            rest: Union[float, None] = None, 
-            work: Union[float, None] = None
-        ):
+        self,
+        submit: bool = False,
+        rest: Union[float, None] = None,
+        work: Union[float, None] = None
+    ):
         super().__init__()
         self.submit = submit
 
@@ -32,12 +35,13 @@ class StudentAction(Action):
 
     def __hash__(self):
         return hash((self.submit, self.rest, self.work))
-    
+
     def __eq__(self, other: object) -> bool:
         if self.submit and other.submit:
             return True
-        
+
         return self.rest == other.rest and self.work == other.work
+
 
 class StudentState(State):
     """
@@ -54,10 +58,14 @@ class StudentState(State):
     time_worked -- the total amount of time spent working on the current assignment
     assign_durations -- a list of the total amount of time spent working on each assignment
     """
+
     def __init__(
-            self, mh: float, prod: float, g: List[float], free_time: int, 
-            time_worked: float, assign_durations: List[float]
-        ):
+        self, mh: float, prod: float, g: List[float],
+        free_time: int,
+        num_assignments: int,
+        time_worked: float,
+        assign_durations: List[float]
+    ):
         super().__init__()
 
         assert -1 <= mh <= 1, "mh must be in [-1, 1]"
@@ -69,28 +77,31 @@ class StudentState(State):
         self.prod = prod
         self.g = g
         self.free_time = free_time
+        self.num_assignments = num_assignments
         self.time_worked = time_worked
         self.assign_durations = assign_durations
-    
+
     def __hash__(self):
         return hash((
-            self.mh, self.prod, tuple(self.g), self.free_time, 
+            self.mh, self.prod, tuple(self.g), self.free_time,
+            self.num_assignments,
             self.time_worked, tuple(self.assign_durations)
         ))
-    
+
     def __eq__(self, other: object) -> bool:
         return all([
-            self.mh == other.mh, 
-            self.prod == other.prod, 
-            self.g == other.g, 
+            self.mh == other.mh,
+            self.prod == other.prod,
+            self.g == other.g,
             self.free_time == other.free_time,
+            self.num_assignments == other.num_assignments,
             self.time_worked == other.time_worked,
             self.assign_durations == other.assign_durations
         ])
-    
+
     def __repr__(self):
         # round the values to 3 decimal places
-        return f"StudentState(mh = {round(self.mh, 3)}, prod = {round(self.prod, 3)}, g = {list(map(lambda x: round(x, 3), self.g))}, ft = {self.free_time}, tw = {round(self.time_worked, 3)}, ad = {list(map(lambda x: round(x, 3), self.assign_durations))})"
+        return f"StudentState(mh = {round(self.mh, 3)}, prod = {round(self.prod, 3)}, g = {list(map(lambda x: round(x, 3), self.g))}, ft = {self.free_time}, n_assign = {self.num_assignments}, tw = {round(self.time_worked, 3)}, ad = {list(map(lambda x: round(x, 3), self.assign_durations))})"
 
 
 class StudentObservation(Observation):
@@ -98,7 +109,8 @@ class StudentObservation(Observation):
     The information that the student observes from the environment at every
     time step.
     """
-    def __init__(self, assignment_grade, free_time):
+
+    def __init__(self, assignment_grade, free_time, num_assignments):
         super().__init__()
 
         assert assignment_grade is None or 0 <= assignment_grade <= 100, "assignment_grade must be None or in [0, 100]"
@@ -106,15 +118,20 @@ class StudentObservation(Observation):
 
         self.assignment_grade = assignment_grade
         self.free_time = free_time
-    
+        self.num_assignments = num_assignments
+
     def __hash__(self):
-        return hash((self.assignment_grade, self.free_time))
-    
+        return hash((self.assignment_grade, self.free_time, self.num_assignments))
+
     def __eq__(self, other: object) -> bool:
-        return self.assignment_grade == other.assignment_grade and self.free_time == other.free_time
-    
+        return all((
+            self.assignment_grade == other.assignment_grade,
+            self.free_time == other.free_time,
+            self.num_assignments == other.num_assignments
+        ))
+
     def __repr__(self):
-        return f"StudentObservation(grade = {self.assignment_grade}, ft = {self.free_time})"
+        return f"StudentObservation(grade = {self.assignment_grade}, ft = {self.free_time}, n_assign = {self.num_assignments})"
 
 
 # ------------------------------------------------------------------------------
@@ -129,7 +146,6 @@ class Student(POMDP):
     def __init__(self):
         super().__init__(0.95)
 
-    
     def _reward(self, s: StudentState, a: StudentAction, sp: StudentState) -> float:
         """
         Returns the reward for taking action a in state s and transitioning to 
@@ -141,23 +157,32 @@ class Student(POMDP):
         prod_reward = sp.prod - s.prod
         # Reward based on competencies improvement
         competencies_improvement = sum(sp.g) - sum(s.g)
+
+        # penalty for too many assignments
+        overwhelmed_penalty = 0
+        if sp.num_assignments > 5:
+            overwhelmed_penalty = (sp.num_assignments - 5) * -0.1
+
         # Aggregate the rewards
-        return mh_improvement + prod_reward + competencies_improvement
-        
+        return mh_improvement + prod_reward + competencies_improvement + overwhelmed_penalty
 
     def transition(self, s: StudentState, a: StudentAction) -> dict[StudentState, float]:
         """
         Returns the probability of transitioning to state sp when taking action
         a in state s. Relative to |S|, |A|, and |O|, this should be O(1).
         """
+        if a.submit and s.num_assignments <= 0:
+            raise ValueError("Cannot submit when there are no assignments")
+
         if a.submit:
             return {
                 StudentState(
-                    max(-1, min(1, s.mh + 0.01)), 
+                    max(-1, min(1, s.mh + 0.01)),
                     s.prod,
-                    s.g, 
-                    ft, 
-                    0, 
+                    s.g,
+                    ft,
+                    s.num_assignments - 1,
+                    0,
                     s.assign_durations + [s.time_worked]
                 ): 1/8
                 for ft in range(8)
@@ -184,13 +209,12 @@ class Student(POMDP):
         # 8 possible free time values, each with equal probability
         return {
             StudentState(
-                mhp_sample[0], mhp_sample[1], new_g, ft, 
+                mhp_sample[0], mhp_sample[1], new_g, ft, s.num_assignments,
                 new_time_worked, new_assign_durations
             ): 1/8
             for mhp_sample, ft in product(mh_prod, range(8))
         }
 
-    
     def observation(self, a: StudentAction, sp: StudentState) -> dict[StudentObservation, float]:
         """
         Returns the probability of each observation for taking action a and 
@@ -206,7 +230,7 @@ class Student(POMDP):
 
             # the mean grade
             grade = max(0, min(100, quality))
-            
+
             # draw 20 samples from a normal distribution with noise
             noisy_grades = np.random.normal(grade, 10, 20)
 
@@ -214,9 +238,9 @@ class Student(POMDP):
             noisy_grades = np.clip(noisy_grades, 0, 100)
 
             return {
-                StudentObservation(grade, sp.free_time): 1/20
+                StudentObservation(grade, sp.free_time, sp.num_assignments): 1/20
                 for grade in noisy_grades
             }
 
         # otherwise, it's just the free time
-        return {StudentObservation(None, sp.free_time): 1.0}
+        return {StudentObservation(None, sp.free_time, sp.num_assignments): 1.0}

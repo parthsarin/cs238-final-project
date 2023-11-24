@@ -2,12 +2,13 @@ from sys import argv
 from env import Classroom, Policy
 from evaluate import Log
 
+
 def start_simulation(
-        n_students: float,
-        d: int,
-        sπ: Policy,
-        tπ: Policy
-    ):
+    n_students: float,
+    d: int,
+    sπ: Policy,
+    tπ: Policy
+):
     """
     Starts the simulation with the given number of students and the given
     policies for the student and teacher.
@@ -20,27 +21,26 @@ def start_simulation(
     """
     c = Classroom(n_students)
     l = Log(c)
-    l.log(-1) # log initial state
+    l.log(-1)  # log initial state
 
     for t in range(d):
         # 1. student actions
         student_as = [sπ[o] for o in c.student_o]
         student_rs = c.student_step(student_as, t)
-        
+
         # 2. teacher actions
         teacher_a = tπ[c.teacher_o]
         teacher_r = c.teacher_step(teacher_a, t)
 
         # 3. log results
         l.log(
-            t, 
-            teacher_a = teacher_a, 
-            teacher_r = teacher_r, 
-            student_as = student_as,
-            student_rs = student_rs
+            t,
+            teacher_a=teacher_a,
+            teacher_r=teacher_r,
+            student_as=student_as,
+            student_rs=student_rs
         )
     print(l.s_oar_memoryless())
-
 
 
 def main(strategy):
@@ -49,7 +49,7 @@ def main(strategy):
         from policy.RandomPolicy import StudentPolicy, TeacherPolicy
     else:
         raise ValueError(f"Unrecognized strategy: {strategy}")
-    
+
     sπ = StudentPolicy()
     tπ = TeacherPolicy()
 
