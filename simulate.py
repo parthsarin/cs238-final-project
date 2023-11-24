@@ -58,8 +58,8 @@ def main():
     for _ in tqdm(range(50)):
         l_random = simulate(35, 365, sπ, tπ)
 
-        t_dfs.append(l_random.t_oar_memoryless())
-        s_dfs.append(l_random.s_oar_memoryless())
+        t_dfs.append(l_random.t_oaroa_memoryless())
+        s_dfs.append(l_random.s_oaroa_memoryless())
 
     df = pd.concat(t_dfs)
     df.to_csv('data/teacher-random.csv', index=False)

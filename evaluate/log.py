@@ -76,7 +76,7 @@ class Log:
     def _prefix_dict(d: dict, prefix: str):
         return {f"{prefix}_{k}": v for k, v in d.items()}
 
-    def t_oar_memoryless(self):
+    def t_oaroa_memoryless(self):
         """
         Returns a list of tuples (o, a, r) for the teacher at each time step,
         observation o, action a, and reward r. This function only returns the
@@ -88,13 +88,14 @@ class Log:
                 **self._prefix_dict(self.history[i].teacher_a, 'a'),
                 'r': self.history[i].teacher_r,
                 **self._prefix_dict(self.history[i].teacher_o, 'op'),
-                'day': i,
+                **self._prefix_dict(self.history[i+1].teacher_a, 'ap'),
+                'day': self.history[i].t,
             }
-            for i in range(1, len(self.history))
+            for i in range(1, len(self.history)-1)
         ]
         return pd.DataFrame(data)
 
-    def s_oar_memoryless(self):
+    def s_oaroa_memoryless(self):
         """
         Returns a list of tuples (o, a, r) for each student at each time step,
         observation o, action a, and reward r. This function only returns the
@@ -106,14 +107,17 @@ class Log:
                 **self._prefix_dict(tup[1], 'a'),
                 'r': tup[2],
                 **self._prefix_dict(tup[3], 'op'),
-                'day': i,
+                **self._prefix_dict(tup[4], 'ap'),
+                'day': tup[5],
             }
-            for i in range(1, len(self.history))
+            for i in range(1, len(self.history)-1)
             for tup in zip(
                 self.history[i-1].student_o,
                 self.history[i].student_a,
                 self.history[i].student_r,
-                self.history[i].student_o
+                self.history[i].student_o,
+                self.history[i+1].student_a,
+                (self.history[i].t for _ in range(self.c.n_students))
             )
         ])
 
