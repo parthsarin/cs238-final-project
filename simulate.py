@@ -62,10 +62,10 @@ def main():
         s_dfs.append(l_random.s_oaroa_memoryless())
 
     df = pd.concat(t_dfs)
-    df.to_csv('data/teacher-random.csv', index=False)
+    df.to_csv('data/50y-rounded/teacher-random.csv', index=False)
 
     df = pd.concat(s_dfs)
-    df.to_csv('data/student-random.csv', index=False)
+    df.to_csv('data/50y-rounded/student-random.csv', index=False)
 
     # plot_rs(
     #     [l_random, l_always_work, l_always_rest],

@@ -8,6 +8,7 @@ from env import (
     StudentAction,
     TeacherAction
 )
+from numeric import full_round
 
 
 class StudentPolicy(MemorylessPolicy):
@@ -20,10 +21,12 @@ class StudentPolicy(MemorylessPolicy):
 
         rest = random()
         work = 1 - rest
+        rest, work = full_round((rest, work), 1)
         return StudentAction(rest=rest, work=work)
 
 
 class TeacherPolicy(MemorylessPolicy):
     def action(self, o: TeacherObservation):
         a = np.random.dirichlet((1, 1, 1))
+        a = full_round(a, 1)
         return TeacherAction(*a)
