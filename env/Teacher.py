@@ -28,6 +28,11 @@ class TeacherAction(Action):
     def __eq__(self, other: object) -> bool:
         return self.rest == other.rest and self.grading == other.grading and self.pd == other.pd
 
+    @staticmethod
+    def is_valid(o, a):
+        return all([0 <= x <= 1 for x in [a.rest, a.grading, a.pd]]) \
+            and isclose(a.rest + a.grading + a.pd, 1)
+
 
 class TeacherState(State):
     """
@@ -97,6 +102,10 @@ class TeacherObservation(Observation):
 
 
 class Teacher(POMDP):
+    ACTION = TeacherAction
+    STATE = TeacherState
+    OBSERVATION = TeacherObservation
+
     def __init__(self):
         super().__init__(0.95)
 

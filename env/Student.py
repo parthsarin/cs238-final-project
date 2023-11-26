@@ -41,6 +41,16 @@ class StudentAction(Action):
 
         return self.rest == other.rest and self.work == other.work
 
+    @staticmethod
+    def is_valid(o, a):
+        if o.num_assignments <= 0 and a.submit:
+            return False
+
+        if not a.submit:
+            return 0 <= a.rest <= 1 and 0 <= a.work <= 1 and a.rest + a.work == 1
+
+        return True
+
 
 class StudentState(State):
     """
@@ -141,6 +151,9 @@ class Student(POMDP):
         [0.1, -0.05],
         [-0.05, 0.1]
     ])
+    ACTION = StudentAction
+    STATE = StudentState
+    OBSERVATION = StudentObservation
 
     def __init__(self):
         super().__init__(0.95)
