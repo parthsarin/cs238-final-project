@@ -61,10 +61,10 @@ def main():
         s_dfs.append(l_random.s_oaroa_memoryless())
 
     df = pd.concat(t_dfs)
-    df.to_csv('data/50y-1m-rounded/teacher-random.csv', index=False)
+    df.to_csv('data/jiahui-test/teacher-random.csv', index=False)
 
     df = pd.concat(s_dfs)
-    df.to_csv('data/50y-1m-rounded/student-random.csv', index=False)
+    df.to_csv('data/jiahui-test/student-random.csv', index=False)
 
 
 if __name__ == '__main__':
