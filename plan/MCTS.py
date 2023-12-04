@@ -115,6 +115,7 @@ def backpropagate(node, reward):
 def get_action_from_states(state1, state2):
     # get action that transitions from state1 to state2
     # ideally, state1 = parent and state2 = child
+    pass
 
 # GOAL: return the best action based on tree search results, prioritizing actions that have been explored most in simulations
 def get_best_action(node):
@@ -126,9 +127,10 @@ def get_best_action(node):
     return get_action_from_states(node.state, best_child.state)
 
 def mcts(df, iterations = 100):
-    # initial state = entire data frame
+    # initial state = entire data frame or is it just the first row?
     root_state = df
     root_node = Node(root_state)
+    # or root_node = df.iloc[0]
 
     for i in range(iterations):
         selected_node = select(root_node)
