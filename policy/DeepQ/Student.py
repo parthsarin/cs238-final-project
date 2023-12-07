@@ -2,43 +2,45 @@ from random import random as rand
 from random import choice
 from math import sqrt, log
 from collections import defaultdict
-from env import TeacherObservation, TeacherAction, Policy
+from env import StudentObservation, StudentAction, Policy
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-A = [
-    TeacherAction(r, g, pd)
+A = [StudentAction(submit=True)] + [
+    StudentAction(False, r, 1 - r)
     for r in (0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
-    for g in (0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
-    for pd in (0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
-    if r + g + pd == 1
 ]
 
 
-class TeacherQ(nn.Module):
+class StudentQ(nn.Module):
     def __init__(self, history_dim, hidden_dim):
         super().__init__()
         self.history_dim = history_dim
         self.hidden_dim = hidden_dim
 
         # add the history encoder
-        self.rnn = nn.GRU(5, history_dim)
+        self.rnn = nn.GRU(6, history_dim)
 
         # add the layers
-        self.fc1 = nn.Linear(history_dim + 2, hidden_dim)
+        self.fc1 = nn.Linear(history_dim + 3, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, len(A))
 
     @staticmethod
-    def o_to_tensor(o: TeacherObservation):
-        inp = [o.free_time, o.num_assignments]
+    def o_to_tensor(o: StudentObservation):
+        inp = [o.assignment_grade, o.free_time, o.num_assignments]
+        if o.assignment_grade is None:
+            inp[0] = -1
         return torch.tensor(inp, dtype=torch.float32)
 
     @staticmethod
-    def a_to_tensor(a: TeacherAction):
-        inp = [a.rest, a.grading, a.pd]
+    def a_to_tensor(a: StudentAction):
+        if a.submit:
+            return torch.tensor([1, 0, 0], dtype=torch.float32)
+
+        inp = [0, a.rest, a.work]
         return torch.tensor(inp, dtype=torch.float32)
 
     def forward(self, history):
@@ -72,8 +74,8 @@ class TeacherQ(nn.Module):
         return x
 
 
-class TeacherPolicy(Policy):
-    def __init__(self, q: TeacherQ, eps: float = 1e-4, train: bool = True, c: float = 1.0):
+class StudentPolicy(Policy):
+    def __init__(self, q: StudentQ, eps: float = 1e-4, train: bool = True, c: float = 1.0):
         self.q = q
         self.eps = eps
         self.train = train
@@ -82,10 +84,10 @@ class TeacherPolicy(Policy):
         self.N = defaultdict(int)
         self.c = c
 
-    def rand_action(self, o: TeacherObservation):
+    def rand_action(self, o: StudentObservation):
         while True:
             a = choice(A)
-            if TeacherAction.is_valid(o, a):
+            if StudentAction.is_valid(o, a):
                 return a
 
     def a_inference(self, history):
@@ -95,7 +97,7 @@ class TeacherPolicy(Policy):
         q_vals = self.q(history)
         for idx in q_vals.argsort(descending=True):
             a = A[idx.item()]
-            if TeacherAction.is_valid(history[-1][0], a):
+            if StudentAction.is_valid(history[-1][0], a):
                 return a
 
         return self.rand_action(history[-1][0])
@@ -120,7 +122,7 @@ class TeacherPolicy(Policy):
         # take the best action
         for idx in a_score.argsort(descending=True):
             a = A[idx.item()]
-            if TeacherAction.is_valid(o, a):
+            if StudentAction.is_valid(o, a):
                 return a, q_vals
 
         return self.rand_action(o)
@@ -128,7 +130,7 @@ class TeacherPolicy(Policy):
     def loss(
         self,
         q_vals,
-        a: TeacherAction,
+        a: StudentAction,
         r: float,
         new_history,
     ):

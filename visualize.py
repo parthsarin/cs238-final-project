@@ -32,9 +32,14 @@ def main():
 
     print("running deep q simulation")
     from policy.DeepQ.Teacher import TeacherQ, TeacherPolicy
-    tQ = TeacherQ(16, 32)
+    tQ = TeacherQ(16, 128)
     tQ.load_state_dict(torch.load("model/deep-q-teacher.pt"))
     tπ = TeacherPolicy(tQ, train=False)
+
+    from policy.DeepQ.Student import StudentQ, StudentPolicy
+    sQ = StudentQ(16, 32)
+    sQ.load_state_dict(torch.load("model/deep-q-student.pt"))
+    sπ = StudentPolicy(sQ, train=False)
 
     l_qdl = simulate(35, 365, sπ, tπ)
 
@@ -44,7 +49,7 @@ def main():
             ("random policy", "random policy"),
             ("q-learned", "q-learned"),
             ("dqn (memoryless)", "dqn (memoryless)"),
-            ("dqn (memoryless)", "dqn")
+            ("dqn", "dqn")
         ]
     )
 
