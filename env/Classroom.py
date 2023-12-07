@@ -218,6 +218,9 @@ class Classroom:
                 self.s_logic.observation(action, new_student_state)
             ))
 
+            # append the action to the student's action list
+            self.student_a[s_idx].append(action)
+
         return rewards
 
     def t_transition(self, s: TeacherState, a: TeacherAction) -> TeacherState:
@@ -278,5 +281,6 @@ class Classroom:
         self.teacher_o.append(self._sample_from_weights_dict(
             self.t_logic.observation(a, new_teacher_state)
         ))
+        self.teacher_a.append(a)
 
         return reward
