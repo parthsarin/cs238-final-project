@@ -1,9 +1,11 @@
 import numpy as np
-from typing import List
+from typing import List, Tuple
 
 # ------------------------------------------------------------------------------
 # generic classes for POMDPs
 # ------------------------------------------------------------------------------
+
+
 class State:
     def __hash__(self):
         raise NotImplementedError("hash not implemented")
@@ -29,39 +31,43 @@ class Observation:
 
 
 class Policy:
-    def action(self, os: List[Observation]):
+    def action(self, h: List[Tuple[Observation, Action]]):
         raise NotImplementedError("action not implemented")
 
-    def __getitem__(self, os: List[Observation]):
-        return self.action(os)
+    def __getitem__(self, h: List[Tuple[Observation, Action]]):
+        return self.action(h)
 
 
 class MemorylessPolicy(Policy):
     def action(self, o: Observation):
         raise NotImplementedError("action not implemented")
 
-    def __getitem__(self, os: List[Observation]):
-        return self.action(os[-1])
+    def __getitem__(self, h: List[Tuple[Observation, Action]]):
+        o = h[-1][0]
+        return self.action(o)
+
 
 def make_memoryless(π: Policy):
     out = MemorylessPolicy()
-    out.action = lambda os: π.action(os[-1])
+    out.action = lambda h: π.action(h[-1][0])
     return out
 
 
 class StateUtilityFunction:
     def __getitem__(self, s: State):
         raise NotImplementedError("utility not implemented")
-    
+
     def __setitem__(self, s: State, u: float):
         raise NotImplementedError("utility not implemented")
+
 
 class UtilityFunction:
     def __getitem__(self, b):
         raise NotImplementedError("utility not implemented")
-    
+
     def __setitem__(self, b, u: float):
         raise NotImplementedError("utility not implemented")
+
 
 def make_belief_utility(U: StateUtilityFunction):
     def get(self, b):
@@ -69,7 +75,7 @@ def make_belief_utility(U: StateUtilityFunction):
         probs = np.array([b[s] for s in states])
         utils = np.array([U[s] for s in states])
         return np.dot(probs, utils)
-    
+
     def set(self, b, u: float):
         states = list(b.keys())
         probs = np.array([b[s] for s in states])
@@ -81,7 +87,7 @@ def make_belief_utility(U: StateUtilityFunction):
     out.__getitem__ = lambda b: get(out, b)
     out.__setitem__ = lambda b, u: set(out, b, u)
     return out
-    
+
 
 # ------------------------------------------------------------------------------
 # POMDP class with some logic implemented
@@ -94,10 +100,10 @@ class POMDP:
 
     This class only holds the mathematical logic for the POMDP.
     """
+
     def __init__(self, discount: float):
         # discount factor
         self.discount = discount
-
 
     def _reward(self, s: State, a: Action, sp: State) -> float:
         """
@@ -106,14 +112,12 @@ class POMDP:
         """
         raise NotImplementedError("reward not implemented")
 
-
     def transition(self, s: State, a: Action) -> dict[State, float]:
         """
         Returns the probability of transitioning to state sp when taking action
         a in state s.
         """
         raise NotImplementedError("transition not implemented")
-    
 
     def observation(self, a: Action, sp: State) -> dict[Observation, float]:
         """
@@ -121,7 +125,6 @@ class POMDP:
         transitioning to state sp.
         """
         raise NotImplementedError("observation not implemented")
-        
 
     def lookahead_state(self, s: State, a: Action, U: StateUtilityFunction) -> float:
         """
@@ -135,7 +138,6 @@ class POMDP:
         return self.reward(s, a) + self.discount * sum(
             prob * U[sp] for (sp, prob) in self.transition(s, a).items()
         )
-    
 
     def lookahead(self, b, a: Action, U: UtilityFunction, update):
         """
@@ -181,7 +183,6 @@ class POMDP:
             obs_prob(o, b, a) * U[update(b, a, o)] for o in O
         )
 
-
     def reward_state(self, s: State, a: Action) -> float:
         """
         Returns the expected reward for taking action a in state s.
@@ -195,7 +196,6 @@ class POMDP:
             out += prob * self._reward(s, a, sp)
         return out
 
-
     def reward(self, b, a: Action) -> float:
         """
         Returns the expected reward given the belief state b and action a.
@@ -208,7 +208,6 @@ class POMDP:
         probs = np.array([b[s] for s in states])
         rewards = np.array([self.reward_state(s, a) for s in states])
         return np.dot(probs, rewards)
-
 
     def rollout(self, s: State, o: Observation, π: Policy, d: int = 10) -> float:
         """
@@ -242,5 +241,5 @@ class POMDP:
             # observe the next state
             os.append(self.observation(a, sp))
             s = sp
-    
+
         return out
