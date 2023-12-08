@@ -54,7 +54,6 @@ class UCB1Policy(MemorylessPolicy):
         o_list = []
         for field in self.obs_ordering:
             v = getattr(o, field)
-            # round the assignment grade
             if field == "assignment_grade" and v is not None:
                 v = round(v)
             o_list.append(v)
@@ -64,18 +63,20 @@ class UCB1Policy(MemorylessPolicy):
         action_space = self.stored_actions[o]
         next_action = {}
         for a in action_space:
-            print("o, a: ", self.Q[(o, a)])
-            a = tuple(v if v != 1e9 else None for v in a)
-            a = self.act_class(**dict(zip(self.act_ordering, a)))
-            if a.is_valid(o_raw, a):
-                if self.o_a_counter[(o, a)] == 0:
-                    b = float('inf')
-                else:
-                    b = self.Q[(o, a)] + self.c * sqrt(log(self.o_counter[o]) / self.o_a_counter[(o, a)])
-                next_action[a] = b
-        a = max(next_action, key=next_action.get)
-        self.o_a_counter[(o, a)] += 1
-        return a
+            if self.o_a_counter[(o, a)] == 0:
+                b = float('inf')
+            else:
+                b = self.Q[(o, a)] + self.c * sqrt(log(self.o_counter[o]) / self.o_a_counter[(o, a)])
+            next_action[a] = b
+        # if there are no valid actions in action space, return random action
+        if len(next_action) == 0:
+            self.num_rand += 1
+            return rand_action(o_raw, self.act_class)
+        a_max = max(next_action, key=next_action.get)
+        self.o_a_counter[(o, a_max)] += 1
+        a_max = tuple(v if v != 1e9 else None for v in a_max)
+        a_max = self.act_class(**dict(zip(self.act_ordering, a_max)))
+        return a_max
 
 
 def load_ucb1_policy(filename: str, act_class: type(Action)):
