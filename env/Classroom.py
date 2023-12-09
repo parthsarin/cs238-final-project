@@ -63,6 +63,7 @@ class Classroom:
         tmp = [self._initialize_student() for _ in range(n_students)]
         self.student_s = [s for (s, _) in tmp]
         self.student_o = [[o] for (_, o) in tmp]
+        self.student_a = [[] for _ in range(n_students)]
 
         # ungraded, graded lists of assignments
         self.unsubmitted: Dict[int, Set[Assignment]] = defaultdict(set)
@@ -74,6 +75,28 @@ class Classroom:
         s, o = self._initialize_teacher()
         self.teacher_s = s
         self.teacher_o = [o]
+        self.teacher_a = []
+
+    @property
+    def student_h(self):
+        """
+        Interleaves observations and actions into a tuple list.
+        """
+        out = []
+        for i in range(self.n_students):
+            sh = list(zip(self.student_o[i], self.student_a[i]))
+            sh.append((self.student_o[i][-1], None))
+            out.append(sh)
+        return out
+
+    @property
+    def teacher_h(self):
+        """
+        Interleaves observations and actions into a tuple list.
+        """
+        out = list(zip(self.teacher_o, self.teacher_a))
+        out.append((self.teacher_o[-1], None))
+        return out
 
     def _initialize_student(self) -> Tuple[StudentState, StudentObservation]:
         """
@@ -195,6 +218,9 @@ class Classroom:
                 self.s_logic.observation(action, new_student_state)
             ))
 
+            # append the action to the student's action list
+            self.student_a[s_idx].append(action)
+
         return rewards
 
     def t_transition(self, s: TeacherState, a: TeacherAction) -> TeacherState:
@@ -255,5 +281,6 @@ class Classroom:
         self.teacher_o.append(self._sample_from_weights_dict(
             self.t_logic.observation(a, new_teacher_state)
         ))
+        self.teacher_a.append(a)
 
         return reward

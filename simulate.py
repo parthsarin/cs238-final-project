@@ -29,11 +29,11 @@ def simulate(
 
     for t in range(d):
         # 1. student actions
-        student_as = [sπ[o] for o in c.student_o]
+        student_as = [sπ[h] for h in c.student_h]
         student_rs = c.student_step(student_as, t)
 
         # 2. teacher actions
-        teacher_a = tπ[c.teacher_o]
+        teacher_a = tπ[c.teacher_h]
         teacher_r = c.teacher_step(teacher_a, t)
 
         # 3. record results
@@ -60,12 +60,11 @@ def main():
         t_dfs.append(l_random.t_oaroa_memoryless())
         s_dfs.append(l_random.s_oaroa_memoryless())
 
-    df = pd.concat(t_dfs)
-    df.to_csv('data/50y-1m/teacher-random.csv', index=False)
+    # df = pd.concat(t_dfs)
+    # df.to_csv('data/50y-1m-rounded/teacher-random.csv', index=False)
 
-    df = pd.concat(s_dfs)
-    df.to_csv('data/50y-1m/student-random.csv', index=False)
-
+    # df = pd.concat(s_dfs)
+    # df.to_csv('data/50y-1m-rounded/student-random.csv', index=False)
 
 if __name__ == '__main__':
     main()
