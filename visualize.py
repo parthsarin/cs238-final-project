@@ -17,6 +17,18 @@ def main():
     tπ = load_qpolicy("model/50y-teacher-Q.pkl", TeacherAction)
     l_q = simulate(35, 365, sπ, tπ)
 
+    print("running epsilon-greedy simulation")
+    from policy.FromEpsilonGreedy import load_epsilon_greedy_policy
+    sπ = load_epsilon_greedy_policy("model/50y-student-Q.pkl", StudentAction)
+    tπ = load_epsilon_greedy_policy("model/50y-teacher-Q.pkl", TeacherAction)
+    l_e = simulate(35, 365, sπ, tπ)
+
+    print("running ucb1 simulation")
+    from policy.FromUCB1 import load_ucb1_policy
+    sπ = load_ucb1_policy("model/50y-student-Q.pkl", StudentAction)
+    tπ = load_ucb1_policy("model/50y-teacher-Q.pkl", TeacherAction)
+    l_ucb1 = simulate(35, 365, sπ, tπ)
+
     print("running deep q, memoryless simulation")
     from policy.DeepQMemoryless.Student import StudentQ, StudentPolicy
     sQ = StudentQ(32)
@@ -44,10 +56,12 @@ def main():
     l_qdl = simulate(35, 365, sπ, tπ)
 
     plot_rs(
-        [l_random, l_q, l_qdl_memoryless, l_qdl],
+        [l_random, l_q, l_e, l_ucb1, l_qdl_memoryless, l_qdl],
         [
             ("random policy", "random policy"),
             ("q-learned", "q-learned"),
+            ("epsilon-greedy", "epsilon-greedy"),
+            ("ucb1", "ucb1"),
             ("dqn (memoryless)", "dqn (memoryless)"),
             ("dqn", "dqn")
         ]

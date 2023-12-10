@@ -66,6 +66,5 @@ def main():
     # df = pd.concat(s_dfs)
     # df.to_csv('data/50y-1m-rounded/student-random.csv', index=False)
 
-
 if __name__ == '__main__':
     main()
