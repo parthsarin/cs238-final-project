@@ -25,8 +25,13 @@ class StudentQ(nn.Module):
         self.rnn = nn.GRU(6, history_dim)
 
         # add the layers
-        self.fc1 = nn.Linear(history_dim + 3, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, len(A))
+        self.fc = nn.Sequential(
+            nn.Linear(history_dim + 3, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, len(A)),
+        )
 
     @staticmethod
     def o_to_tensor(o: StudentObservation):
@@ -59,7 +64,8 @@ class StudentQ(nn.Module):
             # h = F.tanh(self.Wh @ h + self.Wx @ x + self.bh)
             _, h = self.rnn(x.view(1, 1, -1), h.view(1, 1, -1))
 
-        h = h.view(-1)
+        if len(history) > 1:
+            h = F.normalize(h.view(-1), dim=0)
 
         # get the last observation
         o = history[-1][0]
@@ -69,9 +75,7 @@ class StudentQ(nn.Module):
         inp = torch.cat([h, o_tensor])
 
         # run the layers
-        x = F.relu(self.fc1(inp))
-        x = self.fc2(x)
-        return x
+        return self.fc(inp)
 
 
 class StudentPolicy(Policy):

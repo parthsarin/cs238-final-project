@@ -14,11 +14,11 @@ from env import Classroom
 
 import torch
 
-sQ = StudentQ(3, 32)
+sQ = StudentQ(5, 32)
 s_opt = torch.optim.Adam(sQ.parameters(), lr=0.001)
 # sQ.load_state_dict(torch.load("model/deep-q-student.pt"))
 
-tQ = TeacherQ(3, 128)
+tQ = TeacherQ(5, 64)
 t_opt = torch.optim.Adam(tQ.parameters(), lr=0.001)
 # tQ.load_state_dict(torch.load("model/deep-q-teacher.pt"))
 
